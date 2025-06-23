@@ -1,140 +1,138 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useLocalEventData } from '@/contexts/LocalEventDataContext';
-
-// Import des nouveaux composants améliorés
-import { ImprovedAdminHeader } from '@/components/admin/ImprovedAdminHeader';
-import { ImprovedTabNavigation } from '@/components/admin/ImprovedTabNavigation';
-import { QuickStatsCard } from '@/components/admin/QuickStatsCard';
-
-// Import des composants existants
-import { CompactRecapDashboard } from '@/components/admin/CompactRecapDashboard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UnifiedPlanningManagement } from '@/components/admin/UnifiedPlanningManagement';
 import { PeopleManagement } from '@/components/admin/PeopleManagement';
 import { VendorManagement } from '@/components/admin/VendorManagement';
 import { DocumentManagement } from '@/components/admin/DocumentManagement';
 import { EventConfiguration } from '@/components/admin/EventConfiguration';
 import { AdminBottomNavigation } from '@/components/admin/AdminBottomNavigation';
-import { TutorialModal } from '@/components/admin/TutorialModal';
-import { TUTORIAL_CONTENT } from '@/components/admin/TutorialContent';
-
-// Icons
-import { Users, Building2, Calendar, FileText, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAdminAuth } from '@/contexts/AdminAuthContext';
+import { AdminLoginModal } from '@/components/AdminLoginModal';
+import { useAdminProtectedRoute } from '@/hooks/useAdminProtectedRoute';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { useEventData } from '@/contexts/EventDataContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export const AdminPortal = () => {
-  const [activeTab, setActiveTab] = useState('config');
-  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('planning');
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { t } = useTranslation();
-  const { 
-    currentEvent, 
-    people, 
-    vendors, 
-    timelineItems, 
-    planningItems, 
-    documents,
-    getDaysUntilEvent 
-  } = useLocalEventData();
-
-  const getCurrentTutorial = () => {
-    return TUTORIAL_CONTENT[activeTab as keyof typeof TUTORIAL_CONTENT] || TUTORIAL_CONTENT.planning;
-  };
+  const { isAuthenticated, logout } = useAdminAuth();
+  const { showLoginModal, handleCloseLoginModal } = useAdminProtectedRoute();
+  const { currentEvent } = useEventData();
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'config':
-        return (
-          <div className="space-y-6">
-            {/* Quick Stats Row */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <QuickStatsCard
-                title="Jours restants"
-                value={getDaysUntilEvent()}
-                icon={<Clock className="w-4 h-4 text-purple-600" />}
-                subtitle="jusqu'au jour-J"
-              />
-              <QuickStatsCard
-                title="Équipe"
-                value={people.length}
-                icon={<Users className="w-4 h-4 text-blue-600" />}
-                subtitle="personnes"
-              />
-              <QuickStatsCard
-                title="Prestataires"
-                value={vendors.length}
-                icon={<Building2 className="w-4 h-4 text-green-600" />}
-                subtitle="services"
-              />
-              <QuickStatsCard
-                title="Planning"
-                value={timelineItems.length + planningItems.length}
-                icon={<Calendar className="w-4 h-4 text-orange-600" />}
-                subtitle="activités"
-              />
-              <QuickStatsCard
-                title="Documents"
-                value={documents.length}
-                icon={<FileText className="w-4 h-4 text-pink-600" />}
-                subtitle="fichiers"
-              />
-            </div>
-            
-            {/* Configuration principale */}
-            <EventConfiguration />
-          </div>
-        );
+      case 'planning':
+        return <UnifiedPlanningManagement />;
       case 'people':
         return <PeopleManagement />;
       case 'vendors':
         return <VendorManagement />;
-      case 'planning':
-        return <UnifiedPlanningManagement />;
       case 'documents':
         return <DocumentManagement />;
-      default:
+      case 'config':
         return <EventConfiguration />;
+      default:
+        return <UnifiedPlanningManagement />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header amélioré */}
-      <ImprovedAdminHeader 
-        onTutorialOpen={() => setTutorialOpen(true)}
-        isMobile={isMobile}
-      />
+      <AdminLoginModal isOpen={showLoginModal} onClose={handleCloseLoginModal} />
 
-      {/* Navigation par onglets améliorée - Desktop uniquement */}
-      {!isMobile && (
-        <ImprovedTabNavigation 
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+      {isAuthenticated && (
+        <>
+          {/* Header - Responsive */}
+          <div className="bg-white border-b shadow-sm">
+            <div className="flex items-center justify-between p-3 lg:p-4">
+              <div className="flex items-center gap-2 lg:gap-4 overflow-hidden">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => navigate('/')}
+                  className="text-gray-600 px-2 lg:px-3"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1 lg:mr-2" />
+                  <span className="hidden sm:inline">{t('back')}</span>
+                </Button>
+                <div className="overflow-hidden">
+                  <h1 className="text-lg lg:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent truncate">
+                    {currentEvent ? `${currentEvent.name} - Admin` : 'Jour J - Admin'}
+                  </h1>
+                  {currentEvent && (
+                    <p className="text-xs lg:text-sm text-gray-600 truncate">
+                      {currentEvent.event_type} • {new Date(currentEvent.event_date).toLocaleDateString('fr-FR')}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 lg:gap-2">
+                {!isMobile && <LanguageToggle />}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={logout}
+                  className="flex items-center gap-1 px-2 lg:px-3"
+                >
+                  <LogOut className="w-3 h-3" />
+                  {!isMobile && t('logout')}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Navigation Tabs */}
+          {!isMobile && (
+            <div className="bg-white border-b">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+                  <TabsTrigger value="planning" className="flex flex-col py-3">
+                    <span className="text-xs">⏰</span>
+                    <span className="text-xs">Planning & Tâches</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="people" className="flex flex-col py-3">
+                    <span className="text-xs">👥</span>
+                    <span className="text-xs">{t('people')}</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="vendors" className="flex flex-col py-3">
+                    <span className="text-xs">🏢</span>
+                    <span className="text-xs">{t('vendors')}</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="documents" className="flex flex-col py-3">
+                    <span className="text-xs">📁</span>
+                    <span className="text-xs">{t('documents')}</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="config" className="flex flex-col py-3">
+                    <span className="text-xs">⚙️</span>
+                    <span className="text-xs">{t('config')}</span>
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+
+          {/* Content - Responsive */}
+          <div className="p-3 lg:p-6 pb-20 lg:pb-6">
+            {renderTabContent()}
+          </div>
+
+          {/* Mobile Bottom Navigation */}
+          {isMobile && (
+            <AdminBottomNavigation 
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          )}
+        </>
       )}
-
-      {/* Contenu principal */}
-      <div className="max-w-7xl mx-auto p-4 lg:p-6 pb-20 lg:pb-6">
-        {renderTabContent()}
-      </div>
-
-      {/* Navigation mobile */}
-      {isMobile && (
-        <AdminBottomNavigation 
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
-      )}
-
-      {/* Modal de tutoriel */}
-      <TutorialModal
-        isOpen={tutorialOpen}
-        onClose={() => setTutorialOpen(false)}
-        title={getCurrentTutorial().title}
-        description={getCurrentTutorial().description}
-        steps={getCurrentTutorial().steps}
-      />
     </div>
   );
 };

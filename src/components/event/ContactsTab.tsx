@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Building2, Phone, Mail, User } from 'lucide-react';
-import { useEventStore } from '@/stores/eventStore';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
+import { useSharedEventData } from '@/hooks/useSharedEventData';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
 interface ContactsTabProps {
   userId: string;
@@ -26,16 +26,18 @@ const roleLabels = {
 
 export const ContactsTab: React.FC<ContactsTabProps> = ({ userId, userType }) => {
   const [activeSection, setActiveSection] = useState<'team' | 'vendors'>('team');
-  const { people, vendors } = useEventStore();
-  const { currentEventId } = useLocalCurrentEvent();
+  const { people, vendors } = useSharedEventData();
+  const { currentEventId } = useCurrentEvent();
+
+  // Filter data by current event to ensure synchronization
+  const eventPeople = people.filter(person => person.event_id === currentEventId);
+  const eventVendors = vendors.filter(vendor => vendor.event_id === currentEventId);
 
   console.log('ContactsTab - Current event ID:', currentEventId);
   console.log('ContactsTab - All people:', people);
+  console.log('ContactsTab - Filtered people:', eventPeople);
   console.log('ContactsTab - All vendors:', vendors);
-
-  // Filtrer par l'événement actuel
-  const eventPeople = people.filter(person => person.event_id === currentEventId);
-  const eventVendors = vendors.filter(vendor => vendor.event_id === currentEventId);
+  console.log('ContactsTab - Filtered vendors:', eventVendors);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -58,7 +60,7 @@ export const ContactsTab: React.FC<ContactsTabProps> = ({ userId, userType }) =>
         return <Badge className="bg-blue-100 text-blue-800 text-xs">Devis</Badge>;
       case 'negotiation':
         return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Négociation</Badge>;
-      case 'rejected':
+      case 'rejecte, rejected':
         return <Badge className="bg-red-100 text-red-800 text-xs">Refusé</Badge>;
       default:
         return <Badge variant="outline" className="text-xs">{status}</Badge>;
@@ -125,7 +127,7 @@ export const ContactsTab: React.FC<ContactsTabProps> = ({ userId, userType }) =>
                           {person.id === userId && userType === 'person' && (
                             <Badge className="bg-purple-100 text-purple-800 text-xs">Vous</Badge>
                           )}
-                          {getStatusBadge(person.status || 'pending')}
+                          {getStatusBadge(person.confirmation_status || 'pending')}
                         </div>
                       </div>
                       <p className="text-xs lg:text-sm text-gray-600 truncate">

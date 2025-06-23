@@ -7,19 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PersonVendorMultiSelect } from './PersonVendorMultiSelect';
-import type { Task } from '@/stores/eventStore';
-
-interface CreateTaskData {
-  title: string;
-  description?: string;
-  priority: 'high' | 'medium' | 'low';
-  assigned_person_ids: string[];
-  assigned_vendor_ids: string[];
-  duration_minutes: number;
-  due_date: string;
-  notes?: string;
-}
+import { CreateTaskData, Task } from '@/hooks/useTasks';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -37,60 +25,41 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   isLoading = false
 }) => {
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<CreateTaskData>();
-  const [selectedPersonIds, setSelectedPersonIds] = React.useState<string[]>([]);
-  const [selectedVendorIds, setSelectedVendorIds] = React.useState<string[]>([]);
+
+  const priorityValue = watch('priority');
 
   useEffect(() => {
     if (task) {
-      const personIds = task.assigned_person_ids || [];
-      const vendorIds = task.assigned_vendor_ids || [];
-      
-      setSelectedPersonIds(personIds);
-      setSelectedVendorIds(vendorIds);
-      
       reset({
         title: task.title,
         description: task.description || '',
         priority: task.priority,
-        duration_minutes: task.duration_minutes || 30,
+        duration_minutes: task.duration_minutes,
+        assigned_role: task.assigned_role || '',
         notes: task.notes || '',
-        assigned_person_ids: personIds,
-        assigned_vendor_ids: vendorIds,
-        due_date: task.due_date || new Date().toISOString().split('T')[0],
       });
     } else {
-      setSelectedPersonIds([]);
-      setSelectedVendorIds([]);
       reset({
         title: '',
         description: '',
         priority: 'medium',
         duration_minutes: 30,
+        assigned_role: '',
         notes: '',
-        assigned_person_ids: [],
-        assigned_vendor_ids: [],
-        due_date: new Date().toISOString().split('T')[0],
       });
     }
   }, [task, reset]);
 
   const handleFormSubmit = (data: CreateTaskData) => {
-    const submitData = {
-      ...data,
-      assigned_person_ids: selectedPersonIds,
-      assigned_vendor_ids: selectedVendorIds,
-    };
-    onSubmit(submitData);
+    onSubmit(data);
     if (!task) {
       reset();
-      setSelectedPersonIds([]);
-      setSelectedVendorIds([]);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-emerald-800">
             {task ? 'Modifier la tâche' : 'Créer une nouvelle tâche'}
@@ -146,7 +115,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               <div>
                 <Label htmlFor="priority">Priorité *</Label>
-                <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value as 'high' | 'medium' | 'low')}>
+                <Select value={priorityValue} onValueChange={(value) => setValue('priority', value as 'high' | 'medium' | 'low')}>
                   <SelectTrigger className="border-stone-300 focus:border-emerald-500">
                     <SelectValue placeholder="Sélectionner une priorité" />
                   </SelectTrigger>
@@ -163,22 +132,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             <div>
-              <Label htmlFor="due_date">Date d'échéance</Label>
-              <Input
-                id="due_date"
-                type="date"
-                {...register('due_date')}
-                className="border-stone-300 focus:border-emerald-500"
-              />
+              <Label htmlFor="assigned_role">Assigné à</Label>
+              <Select onValueChange={(value) => setValue('assigned_role', value)}>
+                <SelectTrigger className="border-stone-300 focus:border-emerald-500">
+                  <SelectValue placeholder="Sélectionner une personne" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="wedding-planner">Wedding Planner</SelectItem>
+                  <SelectItem value="bride">Mariée</SelectItem>
+                  <SelectItem value="groom">Marié</SelectItem>
+                  <SelectItem value="maid-of-honor">Demoiselle d'honneur</SelectItem>
+                  <SelectItem value="best-man">Témoin</SelectItem>
+                  <SelectItem value="photographer">Photographe</SelectItem>
+                  <SelectItem value="caterer">Traiteur</SelectItem>
+                  <SelectItem value="florist">Fleuriste</SelectItem>
+                  <SelectItem value="musician">Musicien</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            
-            <PersonVendorMultiSelect
-              selectedPersonIds={selectedPersonIds}
-              selectedVendorIds={selectedVendorIds}
-              onPersonSelectionChange={setSelectedPersonIds}
-              onVendorSelectionChange={setSelectedVendorIds}
-              label="Assigner à"
-            />
 
             <div>
               <Label htmlFor="notes">Notes</Label>

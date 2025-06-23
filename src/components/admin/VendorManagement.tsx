@@ -6,27 +6,27 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Plus, Edit, Trash2, Phone, Mail, MapPin, FileText, Calendar } from 'lucide-react';
-import { useLocalVendors } from '@/hooks/useLocalVendors';
+import { useVendors, Vendor } from '@/hooks/useVendors';
 import { VendorModal } from './VendorModal';
 import { VendorDetailModal } from './VendorDetailModal';
 
 export const VendorManagement = () => {
-  const { vendors, loading, loadVendors, addVendor, updateVendor, deleteVendor } = useLocalVendors();
+  const { vendors, loading, loadVendors, addVendor, updateVendor, deleteVendor } = useVendors();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState<any | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
 
   useEffect(() => {
     loadVendors();
   }, []);
 
-  const handleCreateVendor = async (vendorData: any) => {
-    await addVendor(vendorData);
+  const handleCreateVendor = async (vendorData: Partial<Vendor>) => {
+    await addVendor(vendorData as Omit<Vendor, 'id' | 'created_at' | 'updated_at'>);
     setIsCreateModalOpen(false);
   };
 
-  const handleEditVendor = async (vendorData: any) => {
+  const handleEditVendor = async (vendorData: Partial<Vendor>) => {
     if (selectedVendor) {
       await updateVendor(selectedVendor.id, vendorData);
       setIsEditModalOpen(false);
@@ -38,12 +38,12 @@ export const VendorManagement = () => {
     await deleteVendor(vendorId);
   };
 
-  const openEditModal = (vendor: any) => {
+  const openEditModal = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setIsEditModalOpen(true);
   };
 
-  const openDetailModal = (vendor: any) => {
+  const openDetailModal = (vendor: Vendor) => {
     setSelectedVendor(vendor);
     setIsDetailModalOpen(true);
   };
@@ -84,13 +84,19 @@ export const VendorManagement = () => {
     return labels[serviceType as keyof typeof labels] || serviceType || "Non défini";
   };
 
+  const stats = {
+    total: vendors.length,
+    confirmed: vendors.filter(v => v.contract_status === 'confirmed').length,
+    inProgress: vendors.filter(v => v.contract_status === 'in_progress').length,
+    quote: vendors.filter(v => v.contract_status === 'quote').length
+  };
+
   return (
-    <div className="space-y-4">
-      {/* Header optimisé */}
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">🏢 Gestion des Prestataires</h2>
-          <p className="text-sm text-gray-600">Gérez vos prestataires et suivez leurs contrats • {vendors.length} prestataire(s)</p>
+          <h2 className="text-3xl font-bold text-gray-900">Gestion des Prestataires</h2>
+          <p className="text-gray-600">Gérez vos prestataires et leurs documents</p>
         </div>
         <Button 
           onClick={() => setIsCreateModalOpen(true)}
@@ -101,24 +107,32 @@ export const VendorManagement = () => {
         </Button>
       </div>
 
-      {/* Stats compactes en ligne */}
-      <div className="flex items-center gap-6 bg-white p-3 rounded-lg border border-gray-200">
-        <div className="text-center">
-          <div className="text-lg font-bold text-purple-600">{vendors.length}</div>
-          <div className="text-xs text-gray-600">Total</div>
-        </div>
-        <div className="text-center">
-          <div className="text-lg font-bold text-green-600">{vendors.filter(v => v.contract_status === 'confirmed').length}</div>
-          <div className="text-xs text-gray-600">Confirmés</div>
-        </div>
-        <div className="text-center">
-          <div className="text-lg font-bold text-blue-600">{vendors.filter(v => v.contract_status === 'quote').length}</div>
-          <div className="text-xs text-gray-600">Devis</div>
-        </div>
-        <div className="text-center">
-          <div className="text-lg font-bold text-yellow-600">{vendors.filter(v => v.contract_status === 'in_progress').length}</div>
-          <div className="text-xs text-gray-600">En cours</div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-purple-600">{stats.total}</div>
+            <div className="text-sm text-gray-600">Prestataires</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-green-600">{stats.confirmed}</div>
+            <div className="text-sm text-gray-600">Confirmés</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-yellow-600">{stats.inProgress}</div>
+            <div className="text-sm text-gray-600">En cours</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-blue-600">{stats.quote}</div>
+            <div className="text-sm text-gray-600">Devis</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Vendors List */}
@@ -132,11 +146,7 @@ export const VendorManagement = () => {
         ) : vendors.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-gray-500">
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-500 mb-4">Aucun prestataire enregistré</p>
-                <p className="text-sm text-gray-400">Commencez par ajouter vos prestataires pour organiser votre événement</p>
-              </div>
+              Aucun prestataire enregistré
             </CardContent>
           </Card>
         ) : (

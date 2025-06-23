@@ -1,9 +1,7 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
-import { useCurrentTenant } from './useCurrentTenant';
 
 export interface Vendor {
   id: string;
@@ -35,26 +33,19 @@ export interface VendorDocument {
 
 export const useVendors = () => {
   const { toast } = useToast();
-  const { currentEventId } = useLocalCurrentEvent();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [documents, setDocuments] = useState<VendorDocument[]>([]);
   const [loading, setLoading] = useState(false);
-  const subscriptionRef = useRef<any>(null);
-  const { data: currentTenant } = useCurrentTenant();
 
   const loadVendors = async () => {
     setLoading(true);
     try {
-      console.log('useVendors - Loading vendors for event ID:', currentEventId);
-      
       const { data, error } = await supabase
         .from('vendors')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      console.log('useVendors - Loaded vendors:', data);
       setVendors(data || []);
     } catch (error) {
       console.error('Error loading vendors:', error);
@@ -67,52 +58,6 @@ export const useVendors = () => {
       setLoading(false);
     }
   };
-
-  // Combined useEffect for loading and realtime subscription
-  useEffect(() => {
-    // Cleanup previous subscription
-    if (subscriptionRef.current) {
-      console.log('useVendors - Cleaning up previous subscription');
-      subscriptionRef.current.unsubscribe();
-      subscriptionRef.current = null;
-    }
-
-    // Load initial data
-    loadVendors();
-
-    // Setup realtime subscription with unique channel name
-    const channelName = `vendors_changes_${currentEventId}_${Date.now()}`;
-    console.log('useVendors - Setting up realtime subscription:', channelName);
-    
-    try {
-      const subscription = supabase
-        .channel(channelName)
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: 'vendors' 
-          }, 
-          (payload) => {
-            console.log('useVendors - Realtime update received:', payload);
-            loadVendors(); // Reload data when changes occur
-          }
-        )
-        .subscribe();
-
-      subscriptionRef.current = subscription;
-    } catch (error) {
-      console.error('useVendors - Error setting up subscription:', error);
-    }
-
-    return () => {
-      if (subscriptionRef.current) {
-        console.log('useVendors - Cleaning up realtime subscription');
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
-    };
-  }, [currentEventId]);
 
   const loadDocuments = async (vendorId: string) => {
     try {
@@ -135,23 +80,10 @@ export const useVendors = () => {
   };
 
   const addVendor = async (newVendor: Omit<Vendor, 'id' | 'created_at' | 'updated_at'>) => {
-    if (!currentTenant) {
-      toast({ title: "Erreur", description: "Tenant non trouvé", variant: "destructive" });
-      throw new Error("Tenant not found");
-    }
     try {
-      // TOUJOURS assigner l'event_id actuel
-      const vendorWithEventId = {
-        ...newVendor,
-        event_id: currentEventId || newVendor.event_id,
-        tenant_id: currentTenant.id
-      };
-
-      console.log('useVendors - Adding vendor with event_id:', vendorWithEventId);
-
       const { data, error } = await supabase
         .from('vendors')
-        .insert(vendorWithEventId)
+        .insert(newVendor)
         .select()
         .single();
 

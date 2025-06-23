@@ -16,7 +16,7 @@ interface DraggableTimelineItemProps {
   statusColors: Record<string, string>;
   formatDuration: (minutes: number) => string;
   calculateEndTime: (startTime: string, duration: number) => string;
-  getPersonNames: (personIds: string[]) => string[];
+  getPersonName: (personId: string | null) => string | null;
   getStatusLabel: (status: string) => string;
   isDragging: boolean;
   draggedOverIndex: number | null;
@@ -25,7 +25,6 @@ interface DraggableTimelineItemProps {
   onDragOver: (e: React.DragEvent, index: number) => void;
   onDrop: (e: React.DragEvent, index: number) => void;
   onDragEnd: () => void;
-  getVendorName?: (vendorId: string | null) => string | null;
 }
 
 const roleLabels = {
@@ -49,7 +48,7 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
   statusColors,
   formatDuration,
   calculateEndTime,
-  getPersonNames,
+  getPersonName,
   getStatusLabel,
   isDragging,
   draggedOverIndex,
@@ -58,7 +57,6 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
   onDragOver,
   onDrop,
   onDragEnd,
-  getVendorName,
 }) => {
   // Format time to remove seconds (08:00:00 -> 08:00)
   const formatTime = (timeString: string) => {
@@ -67,37 +65,7 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
 
   const displayStartTime = previewTimes ? formatTime(previewTimes.startTime) : formatTime(item.time);
   const displayEndTime = previewTimes ? formatTime(previewTimes.endTime) : formatTime(calculateEndTime(item.time, item.duration));
-  
-  // Gérer l'affichage des personnes assignées
-  const assignedPersonNames = getPersonNames(item.assigned_person_ids || []);
-  
-  const getAssignedPersonsDisplay = () => {
-    if (assignedPersonNames.length === 0) {
-      // Fallback sur l'ancien système si aucune personne dans le nouveau
-      if (item.assigned_role) {
-        return roleLabels[item.assigned_role as keyof typeof roleLabels] || item.assigned_role.replace('-', ' ');
-      }
-      return "Non assigné";
-    }
-    
-    if (assignedPersonNames.length <= 2) {
-      return assignedPersonNames.join(", ");
-    }
-    
-    return `${assignedPersonNames.slice(0, 2).join(", ")} et ${assignedPersonNames.length - 2} autre${assignedPersonNames.length - 2 > 1 ? 's' : ''}`;
-  };
-
-  // Ajout: Si assigné à un prestataire, on le récupère
-  const vendorName = item.assigned_vendor_ids && item.assigned_vendor_ids.length > 0 && getVendorName 
-    ? getVendorName(item.assigned_vendor_ids[0]) 
-    : null;
-
-  // Coloration de la carte pour les items avec prestataire
-  const mainCardClass = `transition-all duration-200 hover:shadow-lg border-stone-200 cursor-move ${
-    isDragging ? 'opacity-60 scale-95 rotate-1 shadow-xl border-purple-300' : 
-    vendorName ? 'bg-sky-50 border-sky-300 ring-1 ring-sky-200' : // Couleur spéciale prestataires
-    'hover:shadow-md hover:border-purple-200'
-  } ${previewTimes ? 'ring-2 ring-purple-300 ring-opacity-50' : ''}`;
+  const personName = getPersonName(item.assigned_person_id);
 
   return (
     <>
@@ -107,7 +75,9 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
       )}
       
       <Card 
-        className={mainCardClass}
+        className={`transition-all duration-200 hover:shadow-lg border-stone-200 cursor-move ${
+          isDragging ? 'opacity-60 scale-95 rotate-1 shadow-xl border-purple-300' : 'hover:shadow-md hover:border-purple-200'
+        } ${previewTimes ? 'ring-2 ring-purple-300 ring-opacity-50' : ''}`}
         draggable
         onDragStart={() => onDragStart(index)}
         onDragOver={(e) => onDragOver(e, index)}
@@ -144,12 +114,6 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
                     {item.priority === 'high' && (
                       <Badge variant="destructive" className="text-xs">
                         🔴 Urgent
-                      </Badge>
-                    )}
-                    {/* Affichage spécial prestataire */}
-                    {vendorName && (
-                      <Badge className="bg-sky-200 text-sky-800 border-sky-300 text-xs font-medium">
-                        Prestataire: {vendorName}
                       </Badge>
                     )}
                   </div>
@@ -209,28 +173,20 @@ export const DraggableTimelineItem: React.FC<DraggableTimelineItemProps> = ({
                     <Clock className="w-3 h-3" />
                     {formatDuration(item.duration)}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    <span>
-                      {vendorName 
-                        ? <>Prestataire: <span className="font-semibold text-sky-700">{vendorName}</span></>
-                        : getAssignedPersonsDisplay()
-                      }
-                    </span>
-                  </div>
+                  {personName && (
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>{personName}</span>
+                    </div>
+                  )}
+                  {item.assigned_role && !personName && (
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>{roleLabels[item.assigned_role as keyof typeof roleLabels] || item.assigned_role.replace('-', ' ')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Affichage détaillé des personnes assignées */}
-              {assignedPersonNames.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {assignedPersonNames.map((name, idx) => (
-                    <Badge key={idx} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                      {name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
 
               {/* Notes */}
               {item.notes && (

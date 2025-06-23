@@ -8,7 +8,6 @@ export interface Event {
   name: string;
   event_type: string;
   event_date: string;
-  slug: string;
   start_time: string | null;
   location: string | null;
   description: string | null;
@@ -16,8 +15,6 @@ export interface Event {
   status: string;
   created_at: string;
   updated_at: string;
-  magic_word?: string | null;
-  share_token?: string | null; // Ajout du share_token
 }
 
 export const useEvents = () => {

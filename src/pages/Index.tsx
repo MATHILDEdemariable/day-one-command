@@ -1,25 +1,24 @@
 
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { HeroSection } from '@/components/marketing/HeroSection';
-import { Footer } from '@/components/Footer';
+import React, { useState } from 'react';
+import { RoleSelection } from '@/components/RoleSelection';
+import { Dashboard } from '@/components/Dashboard';
 
 const Index = () => {
-  const navigate = useNavigate();
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
 
-  const handleCreateEvent = () => {
-    navigate('/portal');
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col">
-      <HeroSection 
-        onAdminClick={handleCreateEvent}
-        onEventClick={handleCreateEvent}
+  if (!selectedRole || !selectedName) {
+    return (
+      <RoleSelection 
+        onRoleSelect={(role, name) => {
+          setSelectedRole(role);
+          setSelectedName(name);
+        }} 
       />
-      <Footer />
-    </div>
-  );
+    );
+  }
+
+  return <Dashboard userRole={selectedRole} userName={selectedName} />;
 };
 
 export default Index;

@@ -1,9 +1,7 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
-import { useCurrentTenant } from './useCurrentTenant';
 
 export interface Person {
   id: string;
@@ -20,18 +18,13 @@ export interface Person {
 
 export const usePeople = () => {
   const { toast } = useToast();
-  const { currentEventId } = useLocalCurrentEvent();
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(false);
-  const subscriptionRef = useRef<any>(null);
-  const { data: currentTenant } = useCurrentTenant();
 
   // Load people from Supabase
   const loadPeople = async () => {
     setLoading(true);
     try {
-      console.log('usePeople - Loading people for event ID:', currentEventId);
-      
       const { data, error } = await supabase
         .from('people')
         .select('*')
@@ -53,7 +46,6 @@ export const usePeople = () => {
         updated_at: person.updated_at,
       }));
       
-      console.log('usePeople - Loaded people:', mappedPeople);
       setPeople(mappedPeople);
     } catch (error) {
       console.error('Error loading people:', error);
@@ -67,76 +59,22 @@ export const usePeople = () => {
     }
   };
 
-  // Combined useEffect for loading and realtime subscription
+  // Load people on component mount
   useEffect(() => {
-    // Cleanup previous subscription
-    if (subscriptionRef.current) {
-      console.log('usePeople - Cleaning up previous subscription');
-      subscriptionRef.current.unsubscribe();
-      subscriptionRef.current = null;
-    }
-
-    // Load initial data
     loadPeople();
-
-    // Setup realtime subscription with unique channel name
-    const channelName = `people_changes_${currentEventId}_${Date.now()}`;
-    console.log('usePeople - Setting up realtime subscription:', channelName);
-    
-    try {
-      const subscription = supabase
-        .channel(channelName)
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: 'people' 
-          }, 
-          (payload) => {
-            console.log('usePeople - Realtime update received:', payload);
-            loadPeople(); // Reload data when changes occur
-          }
-        )
-        .subscribe();
-
-      subscriptionRef.current = subscription;
-    } catch (error) {
-      console.error('usePeople - Error setting up subscription:', error);
-    }
-
-    return () => {
-      if (subscriptionRef.current) {
-        console.log('usePeople - Cleaning up realtime subscription');
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
-    };
-  }, [currentEventId]);
+  }, []);
 
   const addPerson = async (newPerson: Omit<Person, 'id' | 'created_at' | 'updated_at'>) => {
-    if (!currentTenant) {
-      toast({ title: "Erreur", description: "Tenant non trouvé", variant: "destructive" });
-      throw new Error("Tenant not found");
-    }
     try {
-      // TOUJOURS assigner l'event_id actuel
-      const personWithEventId = {
-        ...newPerson,
-        event_id: currentEventId || newPerson.event_id
-      };
-
-      console.log('usePeople - Adding person with event_id:', personWithEventId);
-
       // Map our interface to database fields
       const dbPerson = {
-        name: personWithEventId.name,
-        role: personWithEventId.role,
-        email: personWithEventId.email,
-        phone: personWithEventId.phone,
-        availability_notes: personWithEventId.availability,
-        confirmation_status: personWithEventId.status,
-        event_id: personWithEventId.event_id,
-        tenant_id: currentTenant.id
+        name: newPerson.name,
+        role: newPerson.role,
+        email: newPerson.email,
+        phone: newPerson.phone,
+        availability_notes: newPerson.availability,
+        confirmation_status: newPerson.status,
+        event_id: newPerson.event_id,
       };
 
       const { data, error } = await supabase

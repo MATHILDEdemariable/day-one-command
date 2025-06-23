@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -16,24 +17,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Users, Building2, ArrowRight } from 'lucide-react';
+import { usePeople } from '@/hooks/usePeople';
+import { useVendors } from '@/hooks/useVendors';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
-interface PublicPortalSelectionModalProps {
+interface EventPortalSelectionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  people: any[];
-  vendors: any[];
-  onUserSelect: (userId: string, userType: 'person' | 'vendor', userName: string) => void;
 }
 
-export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProps> = ({
+export const EventPortalSelectionModal: React.FC<EventPortalSelectionModalProps> = ({
   open,
-  onOpenChange,
-  people,
-  vendors,
-  onUserSelect
+  onOpenChange
 }) => {
+  const navigate = useNavigate();
+  const { currentEventId } = useCurrentEvent();
+  const { people, loadPeople } = usePeople();
+  const { vendors, loadVendors } = useVendors();
+  
   const [teamType, setTeamType] = useState<'personal' | 'professional' | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+  useEffect(() => {
+    if (open) {
+      loadPeople();
+      loadVendors();
+    }
+  }, [open]);
 
   const handleTeamTypeSelect = (type: 'personal' | 'professional') => {
     setTeamType(type);
@@ -41,16 +51,13 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
   };
 
   const handleContinue = () => {
-    if (!selectedUserId || !teamType) return;
+    if (!selectedUserId || !teamType || !currentEventId) return;
 
     const userType = teamType === 'personal' ? 'person' : 'vendor';
-    const users = teamType === 'personal' ? people : vendors;
-    const selectedUser = users.find(user => user.id === selectedUserId);
+    const url = `/event-portal?user_type=${userType}&user_id=${selectedUserId}`;
     
-    if (selectedUser) {
-      onUserSelect(selectedUserId, userType, selectedUser.name);
-      onOpenChange(false);
-    }
+    navigate(url);
+    onOpenChange(false);
     
     // Reset state
     setTeamType(null);
@@ -62,16 +69,19 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
     setSelectedUserId('');
   };
 
+  const filteredPeople = people.filter(person => person.event_id === currentEventId);
+  const filteredVendors = vendors.filter(vendor => vendor.event_id === currentEventId);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5 text-purple-600" />
-            Accès Équipe
+            Accès Jour-J
           </DialogTitle>
           <DialogDescription>
-            Sélectionnez votre profil pour accéder à votre planning personnalisé
+            Sélectionnez votre profil pour accéder à votre planning personnalisé du jour J
           </DialogDescription>
         </DialogHeader>
 
@@ -94,7 +104,7 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
                     <div className="text-left">
                       <div className="font-medium">Équipe personnelle</div>
                       <div className="text-sm text-gray-500">
-                        Personnes inscrites à l'événement ({people.length})
+                        Personnes inscrites à l'événement
                       </div>
                     </div>
                   </div>
@@ -112,7 +122,7 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
                     <div className="text-left">
                       <div className="font-medium">Équipe professionnelle</div>
                       <div className="text-sm text-gray-500">
-                        Prestataires et fournisseurs ({vendors.length})
+                        Prestataires et fournisseurs
                       </div>
                     </div>
                   </div>
@@ -134,21 +144,21 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
               </div>
 
               <h3 className="font-medium text-gray-900">
-                {teamType === 'personal' ? 'Sélectionnez votre nom :' : 'Sélectionnez votre prestataire :'}
+                {teamType === 'personal' ? 'Sélectionnez une personne :' : 'Sélectionnez un prestataire :'}
               </h3>
 
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={
                     teamType === 'personal' 
-                      ? "Choisir votre nom..." 
-                      : "Choisir votre prestataire..."
+                      ? "Choisir une personne..." 
+                      : "Choisir un prestataire..."
                   } />
                 </SelectTrigger>
                 <SelectContent>
                   {teamType === 'personal' ? (
-                    people.length > 0 ? (
-                      people.map((person) => (
+                    filteredPeople.length > 0 ? (
+                      filteredPeople.map((person) => (
                         <SelectItem key={person.id} value={person.id}>
                           <div className="flex flex-col">
                             <span className="font-medium">{person.name}</span>
@@ -164,8 +174,8 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
                       </SelectItem>
                     )
                   ) : (
-                    vendors.length > 0 ? (
-                      vendors.map((vendor) => (
+                    filteredVendors.length > 0 ? (
+                      filteredVendors.map((vendor) => (
                         <SelectItem key={vendor.id} value={vendor.id}>
                           <div className="flex flex-col">
                             <span className="font-medium">{vendor.name}</span>
@@ -190,7 +200,7 @@ export const PublicPortalSelectionModal: React.FC<PublicPortalSelectionModalProp
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
                 <ArrowRight className="w-4 h-4 mr-2" />
-                Accéder à mon planning
+                Accéder à mon planning du jour J
               </Button>
             </div>
           )}

@@ -1,7 +1,7 @@
 
-import { useLocalEventData } from '@/contexts/LocalEventDataContext';
+import { useEventData } from '@/contexts/EventDataContext';
 import { useTimelineItems } from '@/hooks/useTimelineItems';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
 export const useSharedEventData = () => {
   const {
@@ -9,78 +9,47 @@ export const useSharedEventData = () => {
     planningItems,
     people,
     vendors,
-    documents,
     loading,
     refreshData,
     getProgressStats,
     getDaysUntilEvent
-  } = useLocalEventData();
+  } = useEventData();
 
   const { timelineItems, loadTimelineItems } = useTimelineItems();
-  const { currentEventId } = useLocalCurrentEvent();
+  const { currentEventId } = useCurrentEvent();
 
-  // Logs de debug améliorés pour le magic access
-  console.log('useSharedEventData - Current Event ID:', currentEventId);
-  console.log('useSharedEventData - All people loaded:', people.length);
-  console.log('useSharedEventData - All vendors loaded:', vendors.length);
-  console.log('useSharedEventData - People with current event_id:', people.filter(p => p.event_id === currentEventId).length);
-  console.log('useSharedEventData - Vendors with current event_id:', vendors.filter(v => v.event_id === currentEventId).length);
-  
-  const eventFilteredTasks = tasks;
-  const eventFilteredPeople = people;
-  const eventFilteredVendors = vendors;
-  const eventFilteredPlanningItems = planningItems;
-  const eventFilteredDocuments = documents;
+  // Debug: Log pour vérifier la cohérence des données
+  console.log('useSharedEventData - Data check:');
+  console.log('Current event ID:', currentEventId);
+  console.log('Tasks from EventDataContext:', tasks);
+  console.log('People from EventDataContext:', people);
+  console.log('Vendors from EventDataContext:', vendors);
+  console.log('Timeline items from useTimelineItems:', timelineItems);
+  console.log('Loading state:', loading);
 
-  console.log('useSharedEventData - Filtered results for event', currentEventId, ':');
-  console.log('  - People:', eventFilteredPeople.length, eventFilteredPeople.map(p => ({ id: p.id, name: p.name, event_id: p.event_id })));
-  console.log('  - Vendors:', eventFilteredVendors.length, eventFilteredVendors.map(v => ({ id: v.id, name: v.name, event_id: v.event_id })));
-  console.log('  - Documents:', eventFilteredDocuments.length);
+  // Strict filtering par event_id pour toutes les données - SANS FILTRE DE STATUT
+  const eventFilteredTasks = tasks.filter(task => task.event_id === currentEventId);
+  const eventFilteredPeople = people.filter(person => person.event_id === currentEventId);
+  const eventFilteredVendors = vendors.filter(vendor => vendor.event_id === currentEventId);
+  const eventFilteredPlanningItems = planningItems.filter(item => item.event_id === currentEventId);
 
-  // Enhanced refresh avec retry automatique pour magic access
-  const enhancedRefreshData = async (retries = 3) => {
-    console.log('useSharedEventData - Enhanced refresh triggered for event:', currentEventId, 'retries left:', retries);
-    
-    if (!currentEventId) {
-      console.log('useSharedEventData - No currentEventId, aborting refresh');
-      return;
-    }
-    
+  console.log('useSharedEventData - Event filtered data (no status filters):');
+  console.log('Filtered tasks:', eventFilteredTasks);
+  console.log('Filtered people:', eventFilteredPeople);
+  console.log('Filtered vendors:', eventFilteredVendors);
+  console.log('Filtered planning items:', eventFilteredPlanningItems);
+
+  // Refresh complet avec timeline items
+  const enhancedRefreshData = async () => {
+    console.log('Enhanced refresh data triggered');
     try {
-      console.log('useSharedEventData - Starting data refresh...');
       await Promise.all([
         refreshData(),
         loadTimelineItems()
       ]);
-      
-      // Vérifier si les données sont maintenant disponibles
-      const hasData = people.filter(p => p.event_id === currentEventId).length > 0 || 
-                     vendors.filter(v => v.event_id === currentEventId).length > 0;
-      
-      if (!hasData && retries > 0) {
-        console.log('useSharedEventData - No data found, retrying in 1 second...');
-        setTimeout(() => enhancedRefreshData(retries - 1), 1000);
-        return;
-      }
-      
-      console.log('useSharedEventData - Enhanced refresh completed successfully');
-      
-      // Logs post-refresh
-      setTimeout(() => {
-        console.log('useSharedEventData - Post-refresh data check:');
-        console.log('  - Current event ID:', currentEventId);
-        console.log('  - People available:', people.length);
-        console.log('  - Vendors available:', vendors.length);
-        console.log('  - People for this event:', people.filter(p => p.event_id === currentEventId).length);
-        console.log('  - Vendors for this event:', vendors.filter(v => v.event_id === currentEventId).length);
-      }, 100);
-      
+      console.log('Enhanced refresh completed');
     } catch (error) {
-      console.error('useSharedEventData - Enhanced refresh error:', error);
-      if (retries > 0) {
-        console.log('useSharedEventData - Retrying after error...');
-        setTimeout(() => enhancedRefreshData(retries - 1), 2000);
-      }
+      console.error('Error in enhanced refresh:', error);
     }
   };
 
@@ -88,19 +57,20 @@ export const useSharedEventData = () => {
   const getCriticalTasks = () => {
     return eventFilteredTasks.filter(task => 
       task.priority === 'high' && task.status !== 'completed'
-    ).slice(0, 5);
+    ).slice(0, 5); // Top 5 tâches critiques
   };
 
   const getUpcomingPlanningItems = () => {
-    return eventFilteredPlanningItems.slice(0, 3);
+    return eventFilteredPlanningItems.slice(0, 3); // Prochaines 3 étapes
   };
 
+  // Suppression des filtres de statut dans les résumés
   const getTeamSummary = () => {
     const total = eventFilteredPeople.length;
     const confirmed = eventFilteredPeople.filter(p => p.confirmation_status === 'confirmed').length;
     const pending = total - confirmed;
     
-    console.log('Team summary calculated for event', currentEventId, ':', { total, confirmed, pending });
+    console.log('Team summary (no status filtering for access):', { total, confirmed, pending });
     return { confirmed, pending, total };
   };
 
@@ -109,11 +79,12 @@ export const useSharedEventData = () => {
     const confirmed = eventFilteredVendors.filter(v => v.contract_status === 'signed').length;
     const pending = total - confirmed;
     
-    console.log('Vendors summary calculated for event', currentEventId, ':', { total, confirmed, pending });
+    console.log('Vendors summary (no status filtering for access):', { total, confirmed, pending });
     return { confirmed, pending, total };
   };
 
   const getTimelineStats = () => {
+    // Limiter aux éléments de l'événement actuel
     const filteredTimelineItems = timelineItems.filter(item => item.event_id === currentEventId);
     
     const totalSteps = filteredTimelineItems.length;
@@ -129,21 +100,24 @@ export const useSharedEventData = () => {
       progressPercentage: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
     };
     
-    console.log('Timeline stats calculated for event', currentEventId, ':', stats);
+    console.log('Timeline stats:', stats);
     return stats;
   };
 
   const getDocumentStats = () => {
+    // Pour l'instant, on simule les stats des documents
+    // Plus tard, cela sera connecté aux vrais documents
     return {
-      totalDocuments: eventFilteredDocuments.length,
+      totalDocuments: 18,
       pendingDocuments: 3,
-      approvedDocuments: eventFilteredDocuments.length - 3
+      approvedDocuments: 15
     };
   };
 
   const getRecentActivity = () => {
     const activities = [];
     
+    // Activités récentes des tâches terminées
     const recentCompletedTasks = eventFilteredTasks
       .filter(task => task.status === 'completed' && task.completed_at)
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
@@ -158,6 +132,7 @@ export const useSharedEventData = () => {
       });
     });
 
+    // Activités récentes des timeline items - uniquement de l'événement actuel
     const filteredTimelineItems = timelineItems.filter(item => item.event_id === currentEventId);
     const recentTimelineItems = filteredTimelineItems
       .filter(item => item.status === 'completed')
@@ -177,19 +152,23 @@ export const useSharedEventData = () => {
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 5);
     
+    console.log('Recent activities:', finalActivities);
     return finalActivities;
   };
 
   return {
-    // Données filtrées par event_id UNIQUEMENT
+    // Données filtrées par event_id UNIQUEMENT - accès pour tous les participants
     tasks: eventFilteredTasks,
     planningItems: eventFilteredPlanningItems,
     timelineItems: timelineItems.filter(item => item.event_id === currentEventId),
-    people: eventFilteredPeople,
-    vendors: eventFilteredVendors,
-    documents: eventFilteredDocuments,
+    people: eventFilteredPeople, // TOUS les participants de l'événement
+    vendors: eventFilteredVendors, // TOUS les prestataires de l'événement
     loading,
+    
+    // Actions - utiliser la version enrichie pour les timeline items
     refreshData: enhancedRefreshData,
+    
+    // Statistiques et calculs
     getProgressStats,
     getDaysUntilEvent,
     getCriticalTasks,

@@ -7,13 +7,12 @@ interface AdminBottomNavigationProps {
   onTabChange: (tab: string) => void;
 }
 
-// SUPPRESSION DE L'ONGLET PARTAGE - Nouveau ordre : Config > Équipe > Prestataires > Planning > Documents
 const ADMIN_TABS = [
-  { id: 'config', label: 'Config', icon: '⚙️' },
+  { id: 'planning', label: 'Planning', icon: '⏰' },
   { id: 'people', label: 'Équipe', icon: '👥' },
   { id: 'vendors', label: 'Prestataires', icon: '🏢' },
-  { id: 'planning', label: 'Planning', icon: '⏰' },
   { id: 'documents', label: 'Documents', icon: '📁' },
+  { id: 'config', label: 'Config', icon: '⚙️' },
 ];
 
 export const AdminBottomNavigation: React.FC<AdminBottomNavigationProps> = ({ 

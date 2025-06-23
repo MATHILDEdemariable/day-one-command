@@ -1,27 +1,32 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, RefreshCw, Settings, LogOut } from 'lucide-react';
 import { useSharedEventData } from '@/hooks/useSharedEventData';
-import { useMagicAccessData } from '@/hooks/useMagicAccessData';
-import { UserSelectionModal } from '@/components/event/UserSelectionModal';
+import { PersonLogin } from '@/components/event/PersonLogin';
+import { UnifiedPersonalPlanning } from '@/components/event/UnifiedPersonalPlanning';
+import { PersonalDocuments } from '@/components/event/PersonalDocuments';
+import { ContactsTab } from '@/components/event/ContactsTab';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 import { usePeople } from '@/hooks/usePeople';
 import { useVendors } from '@/hooks/useVendors';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { GuestEvent, LoggedUser } from '@/types/event';
-import { GuestEventView } from '@/components/event/GuestEventView';
-import { EventPortalHeader } from '@/components/event/EventPortalHeader';
-import { EventPortalContent } from '@/components/event/EventPortalContent';
-import { EventPortalLoading } from '@/components/event/EventPortalLoading';
+
+interface LoggedUser {
+  id: string;
+  name: string;
+  type: 'person' | 'vendor';
+}
 
 const EventPortal = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { loading, refreshData, getDaysUntilEvent } = useSharedEventData();
-  const { currentEventId, setCurrentEventId } = useLocalCurrentEvent();
+  const { currentEventId } = useCurrentEvent();
   const { people, loadPeople, loading: peopleLoading } = usePeople();
   const { vendors, loadVendors, loading: vendorsLoading } = useVendors();
   const { toast } = useToast();
@@ -29,131 +34,25 @@ const EventPortal = () => {
   const [activeTab, setActiveTab] = useState('planning');
   const [viewMode, setViewMode] = useState<'personal' | 'global'>('personal');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isGuestMode, setIsGuestMode] = useState(false);
-  const [guestEvent, setGuestEvent] = useState<GuestEvent | null>(null);
-  const [guestLoading, setGuestLoading] = useState(true);
-  const [hasInitialRefreshed, setHasInitialRefreshed] = useState(false);
-  const [isMagicAccess, setIsMagicAccess] = useState(false);
-  const [magicEventId, setMagicEventId] = useState<string | null>(null);
-  const [showUserModal, setShowUserModal] = useState(false);
-  
-  // Utiliser le hook magic access si nécessaire
-  const { isInitialized: magicDataInitialized } = useMagicAccessData(magicEventId || '');
   
   const daysUntilEvent = getDaysUntilEvent();
 
+  // Force refresh de toutes les données au chargement
   useEffect(() => {
-    // Vérifier l'accès par code magique
-    const magicAccess = searchParams.get('magic_access') === 'true';
-    const eventIdParam = searchParams.get('event_id');
-    
-    if (magicAccess && eventIdParam) {
-      console.log('EventPortal - Magic access detected for event:', eventIdParam);
-      setIsMagicAccess(true);
-      setMagicEventId(eventIdParam);
-      setCurrentEventId(eventIdParam);
-      
-      // Charger les informations de l'événement pour magic access
-      const fetchEventForMagic = async () => {
-        setGuestLoading(true);
-        const { data, error } = await supabase
-          .from('events')
-          .select('id, name, event_date, event_type')
-          .eq('id', eventIdParam)
-          .single();
-          
-        if (error || !data) {
-          console.error('Error fetching magic event:', error);
-          navigate('/magic-access', { replace: true });
-          return;
-        }
-        
-        setGuestEvent(data);
-        setGuestLoading(false);
-      };
-      
-      fetchEventForMagic();
-    } else {
-      // Code existant pour event_slug
-      const eventSlug = searchParams.get('event_slug');
-      if (eventSlug) {
-        setIsGuestMode(true);
-        const fetchGuestEvent = async () => {
-          setGuestLoading(true);
-          const { data, error } = await supabase
-            .from('events')
-            .select('id, name, event_date, event_type')
-            .eq('slug', eventSlug)
-            .single();
-          if (error || !data) {
-            console.error('Error fetching guest event:', error);
-            navigate('/not-found', { replace: true });
-            return;
-          }
-          setGuestEvent(data);
-          setCurrentEventId(data.id);
-          setGuestLoading(false);
-        };
-        fetchGuestEvent();
-      } else {
-        setGuestLoading(false);
-      }
-    }
-  }, [searchParams, setCurrentEventId, navigate]);
-
-  useEffect(() => {
-    if (currentEventId && !hasInitialRefreshed && !isMagicAccess) {
+    console.log('EventPortal - Initializing with event ID:', currentEventId);
+    if (currentEventId) {
       handleFullDataRefresh();
-      setHasInitialRefreshed(true);
     }
-  }, [currentEventId, hasInitialRefreshed, isMagicAccess]);
+  }, [currentEventId]);
 
   useEffect(() => {
+    // Check URL parameters for automatic login after data is loaded
     const userType = searchParams.get('user_type') as 'person' | 'vendor' | null;
     const userId = searchParams.get('user_id');
-    const autoLogin = searchParams.get('auto_login') === 'true';
-
-    if (autoLogin && userType && userId) {
-      let userData: LoggedUser | null = null;
-
-      if (userType === 'person') {
-        let fromStorage = null;
-        try {
-          fromStorage = JSON.parse(localStorage.getItem('eventPortalUser')||"null");
-        } catch {}
-        if (fromStorage && fromStorage.id === userId && fromStorage.type === "person") {
-          userData = fromStorage;
-        } else {
-          const person = people.find(p => p.id === userId);
-          if (person) {
-            userData = { id: person.id, name: person.name, type: 'person' };
-          }
-        }
-      } else if (userType === 'vendor') {
-        let fromStorage = null;
-        try {
-          fromStorage = JSON.parse(localStorage.getItem('eventPortalUser')||"null");
-        } catch {}
-        if (fromStorage && fromStorage.id === userId && fromStorage.type === "vendor") {
-          userData = fromStorage;
-        } else {
-          const vendor = vendors.find(v => v.id === userId);
-          if (vendor) {
-            userData = { id: vendor.id, name: vendor.name, type: 'vendor' };
-          }
-        }
-      }
-
-      if (userData) {
-        setLoggedInUser(userData);
-        localStorage.setItem('eventPortalUser', JSON.stringify(userData));
-        return;
-      }
-    }
-
+    
     if (userType && userId && (people.length > 0 || vendors.length > 0)) {
-      let userData: LoggedUser | null = null;
-
+      let userData: { id: string; name: string; type: 'person' | 'vendor' } | null = null;
+      
       if (userType === 'person') {
         const person = people.find(p => p.id === userId);
         if (person) {
@@ -165,51 +64,63 @@ const EventPortal = () => {
           userData = { id: vendor.id, name: vendor.name, type: 'vendor' };
         }
       }
-
+      
       if (userData) {
         setLoggedInUser(userData);
         localStorage.setItem('eventPortalUser', JSON.stringify(userData));
+        console.log('Auto-logged in user from URL params:', userData);
       }
     } else if (!userType && !userId) {
+      // Check localStorage for existing session if no URL params
       const savedUser = localStorage.getItem('eventPortalUser');
       if (savedUser) {
         try {
           setLoggedInUser(JSON.parse(savedUser));
         } catch (error) {
+          console.error('Error parsing saved user:', error);
           localStorage.removeItem('eventPortalUser');
         }
       }
     }
-  }, [searchParams, people, vendors, isGuestMode]);
+  }, [searchParams, people, vendors]);
 
+  // Force refresh when switching tabs to ensure synchronization
+  useEffect(() => {
+    console.log('EventPortal - Tab changed to:', activeTab, '- refreshing data');
+    handleFullDataRefresh();
+  }, [activeTab]);
+
+  // Fonction de refresh complète et forcée
   const handleFullDataRefresh = async () => {
-    if (!currentEventId) {
-      console.log('EventPortal - No current event ID, skipping refresh');
-      return;
-    }
+    if (!currentEventId) return;
     
-    console.log('EventPortal - Starting full data refresh for event:', currentEventId);
     setIsRefreshing(true);
+    console.log('=== FORCED FULL DATA REFRESH ===');
+    console.log('Event ID:', currentEventId);
+    
     try {
+      // Force refresh de toutes les sources de données en parallèle
       await Promise.all([
         refreshData(),
         loadPeople(),
         loadVendors()
       ]);
-      console.log('EventPortal - Data refresh completed successfully');
+      
+      console.log('All data refreshed successfully');
+      
+      // Afficher un toast de confirmation
       toast({
         title: 'Synchronisation terminée',
         description: 'Toutes les données ont été actualisées',
       });
+      
     } catch (error) {
-      if (!isRefreshing) {
-        console.error('Error during data refresh:', error);
-        toast({
-          title: 'Erreur de synchronisation',
-          description: 'Impossible de synchroniser les données',
-          variant: 'destructive',
-        });
-      }
+      console.error('Error during data refresh:', error);
+      toast({
+        title: 'Erreur de synchronisation',
+        description: 'Impossible de synchroniser les données',
+        variant: 'destructive',
+      });
     } finally {
       setIsRefreshing(false);
     }
@@ -219,126 +130,174 @@ const EventPortal = () => {
     const user = { id: userId, name: userName, type: userType };
     setLoggedInUser(user);
     localStorage.setItem('eventPortalUser', JSON.stringify(user));
+    console.log('User logged in:', user);
+    
+    // Force refresh après connexion
     handleFullDataRefresh();
   };
 
   const handleLogout = () => {
     setLoggedInUser(null);
     localStorage.removeItem('eventPortalUser');
-    localStorage.removeItem('eventPortalMagicLogin');
+    
+    // Clear URL parameters and redirect to home
     navigate('/', { replace: true });
+    console.log('User logged out');
+  };
+
+  const handleRefreshData = () => {
+    console.log('Manual data refresh triggered for event ID:', currentEventId);
+    handleFullDataRefresh();
+  };
+
+  // Si pas encore connecté, afficher l'écran de connexion
+  if (!loggedInUser) {
+    return <PersonLogin onLogin={handleLogin} />;
+  }
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'planning':
+        return (
+          <UnifiedPersonalPlanning 
+            userId={loggedInUser.id} 
+            userName={loggedInUser.name}
+            userType={loggedInUser.type}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+        );
+      case 'contacts':
+        return (
+          <ContactsTab 
+            userId={loggedInUser.id}
+            userType={loggedInUser.type}
+          />
+        );
+      case 'documents':
+        return (
+          <PersonalDocuments 
+            personId={loggedInUser.id} 
+            personName={loggedInUser.name} 
+          />
+        );
+      default:
+        return null;
+    }
   };
 
   const isDataLoading = loading || peopleLoading || vendorsLoading || isRefreshing;
 
-  if (guestLoading) {
-    return <EventPortalLoading fullScreen message="Chargement de l'événement..." details={null} />;
-  }
-
-  // Gestion spéciale pour l'accès magic - attendre que les données soient initialisées
-  if (isMagicAccess && guestEvent) {
-    if (!magicDataInitialized) {
-      return <EventPortalLoading fullScreen message="Synchronisation des données..." details="Chargement des participants et prestataires..." />;
-    }
-
-    if (!loggedInUser) {
-      return (
-        <>
-          <UserSelectionModal
-            isOpen={true}
-            onClose={() => navigate('/team-dashboard?magic_access=true&event_id=' + magicEventId)}
-            onLogin={handleLogin}
-          />
-        </>
-      );
-    }
-
-    // Utilisateur connecté via magic access, afficher l'interface normale
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
-        <EventPortalHeader
-          userName={loggedInUser.name}
-          daysUntilEvent={daysUntilEvent}
-          isDataLoading={isDataLoading}
-          isRefreshing={isRefreshing}
-          isMobile={isMobile}
-          onBack={() => navigate('/team-dashboard?magic_access=true&event_id=' + magicEventId)}
-          onRefresh={handleFullDataRefresh}
-          onLogout={handleLogout}
-          onAdmin={() => navigate('/admin')}
-        />
-
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 lg:py-8 pb-20 lg:pb-8">
-          {isDataLoading ? (
-            <EventPortalLoading isRefreshing={isRefreshing} />
-          ) : (
-            <EventPortalContent
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              isMobile={isMobile}
-              loggedInUser={loggedInUser}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-            />
-          )}
-        </div>
-
-        {isMobile && (
-          <BottomNavigation 
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Code existant pour les autres modes
-  if ((isGuestMode && guestEvent)) {
-    return <GuestEventView event={guestEvent} />;
-  }
-  
-  if (!loggedInUser) {
-    return (
-      <>
-        <UserSelectionModal
-          isOpen={true}
-          onClose={() => navigate('/')}
-          onLogin={handleLogin}
-        />
-      </>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
-      <EventPortalHeader
-        userName={loggedInUser.name}
-        daysUntilEvent={daysUntilEvent}
-        isDataLoading={isDataLoading}
-        isRefreshing={isRefreshing}
-        isMobile={isMobile}
-        onBack={() => navigate('/')}
-        onRefresh={handleFullDataRefresh}
-        onLogout={handleLogout}
-        onAdmin={() => navigate('/admin')}
-      />
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-purple-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="flex items-center justify-between h-14 lg:h-16">
+            <div className="flex items-center gap-2 lg:gap-4 overflow-hidden">
+              <Button
+                variant="ghost"
+                onClick={() => navigate('/')}
+                className="text-purple-700 hover:text-purple-900 px-2 lg:px-3"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1 lg:mr-2" />
+                <span className="hidden sm:inline">Retour</span>
+              </Button>
+              <div className="hidden lg:block h-6 w-px bg-purple-200" />
+              <h1 className="text-base lg:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent truncate">
+                Jour-J - {loggedInUser.name}
+              </h1>
+            </div>
+            
+            <div className="flex items-center gap-1 lg:gap-3">
+              <div className="text-xs lg:text-sm text-purple-600 font-medium whitespace-nowrap">
+                J-{daysUntilEvent} jours
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshData}
+                disabled={isDataLoading}
+                className="border-purple-200 text-purple-700 hover:bg-purple-50 h-7 w-7 lg:h-8 lg:w-auto lg:px-3 p-0"
+                title="Synchronisation forcée"
+              >
+                <RefreshCw className={`w-4 h-4 ${!isMobile && 'mr-2'} ${isDataLoading ? 'animate-spin' : ''}`} />
+                {!isMobile && (isRefreshing ? 'Sync...' : 'Actualiser')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="border-red-200 text-red-700 hover:bg-red-50 h-7 w-7 lg:h-8 lg:w-auto lg:px-3 p-0"
+                title="Déconnexion"
+              >
+                <LogOut className="w-4 h-4 lg:mr-2" />
+                {!isMobile && 'Déconnexion'}
+              </Button>
+              {!isMobile && (
+                <Button
+                  onClick={() => navigate('/admin')}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Admin
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Content */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 lg:py-8 pb-20 lg:pb-8">
         {isDataLoading ? (
-          <EventPortalLoading isRefreshing={isRefreshing} />
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-purple-600" />
+              <p className="text-purple-600">
+                {isRefreshing ? 'Synchronisation forcée en cours...' : 'Chargement des données...'}
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Synchronisation avec l'Admin Portal
+              </p>
+            </div>
+          </div>
         ) : (
-          <EventPortalContent
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            isMobile={isMobile}
-            loggedInUser={loggedInUser}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
+          <div className="space-y-6">
+            {/* Desktop Tabs */}
+            {!isMobile && (
+              <div className="flex gap-2 border-b border-gray-200">
+                <Button
+                  variant={activeTab === 'planning' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('planning')}
+                  className={activeTab === 'planning' ? 'bg-gradient-to-r from-purple-600 to-pink-600' : ''}
+                >
+                  📅 Planning
+                </Button>
+                <Button
+                  variant={activeTab === 'contacts' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('contacts')}
+                  className={activeTab === 'contacts' ? 'bg-gradient-to-r from-purple-600 to-pink-600' : ''}
+                >
+                  👥 Contacts
+                </Button>
+                <Button
+                  variant={activeTab === 'documents' ? 'default' : 'ghost'}
+                  onClick={() => setActiveTab('documents')}
+                  className={activeTab === 'documents' ? 'bg-gradient-to-r from-purple-600 to-pink-600' : ''}
+                >
+                  📁 Mes Fichiers
+                </Button>
+              </div>
+            )}
+            
+            {/* Tab Content */}
+            {renderTabContent()}
+          </div>
         )}
       </div>
 
+      {/* Mobile Bottom Navigation */}
       {isMobile && (
         <BottomNavigation 
           activeTab={activeTab}

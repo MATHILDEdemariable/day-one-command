@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { usePlanningItems } from '@/hooks/usePlanningItems';
@@ -46,32 +47,24 @@ export const EventDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   
-  // Enhanced refresh function with better logging
-  const refreshData = async () => {
-    console.log('EventDataContext - Enhanced refresh triggered for event:', currentEventId);
-    try {
-      await Promise.all([
-        refetchTasks(),
-        loadPeople(),
-        loadVendors(),
-        loadDocuments()
-      ]);
-      console.log('EventDataContext - All data refreshed successfully');
-      setLastUpdate(Date.now());
-    } catch (error) {
-      console.error('EventDataContext - Error during refresh:', error);
-    }
-  };
-  
-  // Force refresh when event changes
+  // Auto-refresh data every 30 seconds for real-time sync
   useEffect(() => {
-    if (currentEventId) {
-      console.log('EventDataContext - Event changed, forcing refresh for:', currentEventId);
+    const interval = setInterval(() => {
       refreshData();
-    }
-  }, [currentEventId]);
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const loading = tasksLoading || peopleLoading || vendorsLoading || documentsLoading || eventsLoading;
+
+  const refreshData = () => {
+    refetchTasks();
+    loadPeople();
+    loadVendors();
+    loadDocuments();
+    setLastUpdate(Date.now());
+  };
 
   const getProgressStats = () => {
     const totalTasks = tasks.length;

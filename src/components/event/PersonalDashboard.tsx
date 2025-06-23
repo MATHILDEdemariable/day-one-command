@@ -2,109 +2,181 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, AlertTriangle, Users } from 'lucide-react';
+import { Calendar, CheckSquare, Clock, Folder, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useSharedEventData } from '@/hooks/useSharedEventData';
+import { useTimelineItems } from '@/hooks/useTimelineItems';
+import { useEventDocuments } from '@/hooks/useEventDocuments';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
 interface PersonalDashboardProps {
-  userId: string;
-  userRole: string;
+  personId: string;
+  personName: string;
 }
 
-export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({ userId, userRole }) => {
-  const { tasks, timelineItems, people } = useSharedEventData();
+export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({ 
+  personId, 
+  personName 
+}) => {
+  const { tasks, getDaysUntilEvent } = useSharedEventData();
+  const { timelineItems } = useTimelineItems();
+  const { currentEventId } = useCurrentEvent();
+  const { documents } = useEventDocuments(currentEventId);
 
-  // Filtrer les tâches assignées à l'utilisateur
-  const userTasks = tasks.filter(task => {
-    if (task.assigned_person_ids && task.assigned_person_ids.length > 0) {
-      return task.assigned_person_ids.includes(userId);
-    }
-    // Fallback pour les anciennes tâches qui n'ont pas encore été migrées
-    return false;
-  });
+  const daysUntilEvent = getDaysUntilEvent();
 
-  // Filtrer les éléments de timeline assignés à l'utilisateur
-  const userTimelineItems = timelineItems.filter(item => {
-    if (item.assigned_person_ids && item.assigned_person_ids.length > 0) {
-      return item.assigned_person_ids.includes(userId);
-    }
-    return item.assigned_role === userRole;
-  });
+  // Calculs personnels
+  const personalTasks = tasks.filter(task => task.assigned_person_id === personId);
+  const personalTimelineItems = timelineItems.filter(item => item.assigned_person_id === personId);
+  const personalDocuments = documents.filter(doc => doc.assigned_to && doc.assigned_to.includes(personId));
 
-  const completedTasks = userTasks.filter(task => task.status === 'completed').length;
-  const urgentTasks = userTasks.filter(task => task.priority === 'high' && task.status !== 'completed').length;
-  const upcomingTimelineItems = userTimelineItems.filter(item => item.status === 'scheduled').length;
+  const completedTasks = personalTasks.filter(task => task.status === 'completed').length;
+  const urgentTasks = personalTasks.filter(task => task.priority === 'high' && task.status !== 'completed').length;
+  const completedTimelineItems = personalTimelineItems.filter(item => item.status === 'completed').length;
+  const delayedItems = personalTimelineItems.filter(item => item.status === 'delayed').length;
+
+  const totalPersonalProgress = personalTasks.length + personalTimelineItems.length;
+  const totalPersonalCompleted = completedTasks + completedTimelineItems;
+  const personalProgressPercentage = totalPersonalProgress > 0 ? Math.round((totalPersonalCompleted / totalPersonalProgress) * 100) : 0;
+
+  // Prochaine étape
+  const nextTimelineItem = personalTimelineItems
+    .filter(item => item.status === 'scheduled')
+    .sort((a, b) => a.time.localeCompare(b.time))[0];
+
+  // Prochaine tâche urgente
+  const nextUrgentTask = personalTasks
+    .filter(task => task.priority === 'high' && task.status !== 'completed')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
 
   return (
     <div className="space-y-6">
+      {/* Welcome Header */}
+      <Card className="bg-gradient-to-r from-purple-600 to-pink-600 text-white border-0">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Bonjour, {personName}!</h2>
+              <p className="text-purple-100">
+                Il reste <strong>{daysUntilEvent} jour{daysUntilEvent !== 1 ? 's' : ''}</strong> avant l'événement
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">{personalProgressPercentage}%</div>
+              <div className="text-sm text-purple-100">Progression globale</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mes tâches</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedTasks}/{userTasks.length}</div>
-            <p className="text-xs text-muted-foreground">tâches terminées</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+          <CardContent className="p-4 text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Calendar className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="text-2xl font-bold text-blue-600">{personalTimelineItems.length}</div>
+            <div className="text-sm text-gray-600">Étapes planning</div>
+            <Badge variant="outline" className="mt-1 text-xs border-blue-200 text-blue-700">
+              {completedTimelineItems} terminées
+            </Badge>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tâches urgentes</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{urgentTasks}</div>
-            <p className="text-xs text-muted-foreground">à traiter en priorité</p>
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+          <CardContent className="p-4 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckSquare className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="text-2xl font-bold text-green-600">{personalTasks.length}</div>
+            <div className="text-sm text-gray-600">Tâches assignées</div>
+            <Badge variant="outline" className="mt-1 text-xs border-green-200 text-green-700">
+              {completedTasks} terminées
+            </Badge>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Planning</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{upcomingTimelineItems}</div>
-            <p className="text-xs text-muted-foreground">étapes à venir</p>
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+          <CardContent className="p-4 text-center">
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Folder className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="text-2xl font-bold text-purple-600">{personalDocuments.length}</div>
+            <div className="text-sm text-gray-600">Documents</div>
+            <Badge variant="outline" className="mt-1 text-xs border-purple-200 text-purple-700">
+              Assignés
+            </Badge>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+          <CardContent className="p-4 text-center">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${
+              urgentTasks > 0 ? 'bg-red-100' : 'bg-gray-100'
+            }`}>
+              <AlertTriangle className={`w-6 h-6 ${urgentTasks > 0 ? 'text-red-600' : 'text-gray-400'}`} />
+            </div>
+            <div className={`text-2xl font-bold ${urgentTasks > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+              {urgentTasks}
+            </div>
+            <div className="text-sm text-gray-600">Tâches urgentes</div>
+            {delayedItems > 0 && (
+              <Badge variant="destructive" className="mt-1 text-xs">
+                {delayedItems} en retard
+              </Badge>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Prochaines tâches */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Mes prochaines tâches
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {userTasks.length === 0 ? (
-            <p className="text-muted-foreground">Aucune tâche assignée pour le moment.</p>
-          ) : (
-            <div className="space-y-2">
-              {userTasks.slice(0, 5).map((task) => (
-                <div key={task.id} className="flex items-center justify-between p-2 border rounded">
-                  <div>
-                    <p className="font-medium">{task.title}</p>
-                    <p className="text-sm text-muted-foreground">{task.description}</p>
+      {/* Quick Actions */}
+      {(nextTimelineItem || nextUrgentTask) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {nextTimelineItem && (
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Clock className="w-5 h-5 text-blue-500" />
+                  Prochaine étape
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-blue-600">{nextTimelineItem.time.substring(0, 5)}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={task.priority === 'high' ? 'destructive' : 'outline'}>
-                      {task.priority}
-                    </Badge>
-                    <Badge variant={task.status === 'completed' ? 'default' : 'secondary'}>
-                      {task.status}
-                    </Badge>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{nextTimelineItem.title}</h4>
+                    <p className="text-sm text-gray-600">{nextTimelineItem.description}</p>
                   </div>
                 </div>
-              ))}
-            </div>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+
+          {nextUrgentTask && (
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  Tâche urgente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-sm">🔴</span>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{nextUrgentTask.title}</h4>
+                    <p className="text-sm text-gray-600">{nextUrgentTask.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 };

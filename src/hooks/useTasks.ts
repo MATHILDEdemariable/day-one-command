@@ -1,7 +1,7 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useCurrentTenant } from './useCurrentTenant';
 
 export interface Task {
   id: string;
@@ -67,82 +67,31 @@ export const useTasks = () => {
 export const useCreateTask = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data: currentTenant } = useCurrentTenant();
 
   return useMutation({
     mutationFn: async (data: CreateTaskData) => {
-      if (!currentTenant) {
-        throw new Error('Tenant non identifié. Impossible de créer la tâche.');
-      }
-      const taskWithTenant = { ...data, tenant_id: currentTenant.id };
-
       const { data: result, error } = await supabase
         .from('tasks')
-        .insert([taskWithTenant])
+        .insert([data])
         .select()
         .single();
 
       if (error) throw error;
       return result;
     },
-    onMutate: async (newTask) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks'] });
-      const previousTasks = queryClient.getQueryData<Task[]>(['tasks']) || [];
-
-      // Créer une tâche optimiste avec id temporaire
-      const optimisticTask: Task = {
-        id: `optimistic-${Date.now()}`,
-        title: newTask.title,
-        description: newTask.description ?? null,
-        status: 'pending',
-        priority: newTask.priority,
-        duration_minutes: newTask.duration_minutes,
-        category_id: newTask.category_id ?? null,
-        assigned_person_id: newTask.assigned_person_id ?? null,
-        assigned_vendor_id: newTask.assigned_vendor_id ?? null,
-        assigned_role: newTask.assigned_role ?? null,
-        event_id: newTask.event_id ?? null,
-        order_index: previousTasks.length,
-        notes: newTask.notes ?? null,
-        completed_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      queryClient.setQueryData<Task[]>(['tasks'], [optimisticTask, ...previousTasks]);
-      return { previousTasks };
-    },
-    onSuccess: (savedTask, _newTask, context) => {
-      // Typage strict des champs `status` et `priority`
-      const patchedTask: Task = {
-        ...savedTask,
-        status: ['pending', 'in-progress', 'completed', 'delayed'].includes(savedTask.status)
-          ? savedTask.status as Task["status"]
-          : 'pending',
-        priority: ['high', 'medium', 'low'].includes(savedTask.priority)
-          ? savedTask.priority as Task["priority"]
-          : 'medium'
-      };
-      queryClient.setQueryData<Task[]>(['tasks'], (old = []) =>
-        [patchedTask, ...old.filter((t) => !t.id.startsWith('optimistic-'))]
-      );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast({
         title: 'Succès',
         description: 'Tâche créée avec succès',
       });
     },
-    onError: (_error, _variables, context) => {
-      // En cas d’erreur, rollback à l’état précédent
-      if (context?.previousTasks) {
-        queryClient.setQueryData<Task[]>(['tasks'], context.previousTasks);
-      }
+    onError: () => {
       toast({
         title: 'Erreur',
         description: 'Impossible de créer la tâche',
         variant: 'destructive',
       });
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
 };

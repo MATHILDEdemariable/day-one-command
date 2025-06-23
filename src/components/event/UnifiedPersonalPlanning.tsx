@@ -1,10 +1,12 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Calendar, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useEventStore } from '@/stores/eventStore';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
+import { useTimelineItems } from '@/hooks/useTimelineItems';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
+import { usePeople } from '@/hooks/usePeople';
 
 interface UnifiedPersonalPlanningProps {
   userId: string;
@@ -33,28 +35,23 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
   viewMode,
   onViewModeChange
 }) => {
-  const { timelineItems, people, vendors, loading } = useEventStore();
-  const { currentEventId } = useLocalCurrentEvent();
+  const { timelineItems, loading } = useTimelineItems();
+  const { currentEventId } = useCurrentEvent();
+  const { people } = usePeople();
 
   // Filter timeline items by current event
   const eventTimelineItems = timelineItems.filter(item => item.event_id === currentEventId);
 
   // Filter according to view mode
-  let filteredTimelineItems;
-  if (viewMode === 'personal') {
-    filteredTimelineItems = eventTimelineItems.filter(item => {
-      if (userType === 'person') {
-        // FIX: Use array-based assignment for persons
-        return item.assigned_person_ids && item.assigned_person_ids.includes(userId);
-      } else {
-        // FIX: Use array-based assignment for vendors
-        return item.assigned_vendor_ids && item.assigned_vendor_ids.includes(userId);
-      }
-    });
-  } else {
-    // Global view : on montre tout
-    filteredTimelineItems = eventTimelineItems;
-  }
+  const filteredTimelineItems = viewMode === 'personal' 
+    ? eventTimelineItems.filter(item => {
+        if (userType === 'person') {
+          return item.assigned_person_id === userId;
+        } else {
+          return item.assigned_role === userId;
+        }
+      })
+    : eventTimelineItems;
 
   const formatTime = (time: string, duration: number) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -77,17 +74,11 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
     return roleLabels[person.role as keyof typeof roleLabels] || person.role;
   };
 
-  const getVendorName = (vendorId: string | null) => {
-    if (!vendorId) return null;
-    const vendor = vendors.find(v => v.id === vendorId);
-    return vendor?.name ?? null;
-  };
-
   const isUserItem = (item: any) => {
     if (userType === 'person') {
-      return item.assigned_person_ids && item.assigned_person_ids.includes(userId);
+      return item.assigned_person_id === userId;
     } else {
-      return item.assigned_vendor_ids && item.assigned_vendor_ids.includes(userId);
+      return item.assigned_role === userId;
     }
   };
 
@@ -177,7 +168,6 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
               const personName = getPersonName(item.assigned_person_id);
               const personRole = getPersonRole(item.assigned_person_id);
               const isCurrentUser = isUserItem(item);
-              const vendorName = item.assigned_vendor_id ? getVendorName(item.assigned_vendor_id) : null;
               
               return (
                 <div 
@@ -185,9 +175,7 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
                   className={`flex items-start gap-3 lg:gap-4 p-3 lg:p-4 rounded-lg border backdrop-blur-sm shadow-sm transition-all hover:shadow-md ${
                     viewMode === 'global' && isCurrentUser 
                       ? 'border-purple-300 bg-purple-50/90 ring-1 ring-purple-200' 
-                      : item.assigned_vendor_id === userId
-                        ? 'border-sky-300 bg-sky-50/80 ring-1 ring-sky-200'
-                        : 'border-gray-200 bg-white/90'
+                      : 'border-gray-200 bg-white/90'
                   }`}
                 >
                   {/* Icon */}
@@ -195,9 +183,7 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
                     <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg flex items-center justify-center text-white ${
                       isCurrentUser 
                         ? 'bg-gradient-to-br from-purple-500 to-pink-500' 
-                        : item.assigned_vendor_id === userId
-                          ? 'bg-sky-500'
-                          : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                        : 'bg-gradient-to-br from-gray-400 to-gray-500'
                     }`}>
                       <Clock className="w-3 h-3 lg:w-4 lg:h-4" />
                     </div>
@@ -209,7 +195,7 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
                       {/* Time in prominent position */}
                       <div className="flex items-center gap-2">
                         <span className={`text-lg font-bold whitespace-nowrap ${
-                          isCurrentUser || item.assigned_vendor_id === userId ? 'text-sky-700' : 'text-gray-700'
+                          isCurrentUser ? 'text-purple-600' : 'text-gray-700'
                         }`}>
                           {formatTime(item.time, item.duration)}
                         </span>
@@ -221,14 +207,6 @@ export const UnifiedPersonalPlanning: React.FC<UnifiedPersonalPlanningProps> = (
                       {/* Title */}
                       <h4 className="font-medium text-sm lg:text-base text-gray-900 break-words">
                         {item.title}
-                        {item.assigned_vendor_id === userId && (
-                          <span className="ml-2 text-xs font-semibold text-sky-700">Prestataire (vous)</span>
-                        )}
-                        {item.assigned_vendor_id && item.assigned_vendor_id !== userId && (
-                          <span className="ml-2 text-xs font-semibold text-sky-700">
-                              • Prestataire: {getVendorName(item.assigned_vendor_id)}
-                          </span>
-                        )}
                       </h4>
                     </div>
 

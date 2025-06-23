@@ -1,10 +1,11 @@
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, ExternalLink, Folder } from 'lucide-react';
-import { useEventStore } from '@/stores/eventStore';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
+import { useEventDocuments } from '@/hooks/useEventDocuments';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
 interface PersonalDocumentsProps {
   personId: string;
@@ -15,20 +16,13 @@ export const PersonalDocuments: React.FC<PersonalDocumentsProps> = ({
   personId, 
   personName 
 }) => {
-  const { currentEventId } = useLocalCurrentEvent();
-  const { documents } = useEventStore();
+  const { currentEventId } = useCurrentEvent();
+  const { documents, getDocumentUrl } = useEventDocuments(currentEventId);
 
-  console.log('PersonalDocuments - Current event ID:', currentEventId);
-  console.log('PersonalDocuments - All documents:', documents);
-
-  // Filtrer les documents par événement actuel et assignés à cette personne
-  const filteredEventDocuments = documents.filter(doc => doc.event_id === currentEventId);
-  const personalDocuments = filteredEventDocuments.filter(doc => 
+  // Filtrer les documents assignés à cette personne
+  const personalDocuments = documents.filter(doc => 
     doc.assigned_to && doc.assigned_to.includes(personId)
   );
-
-  console.log('PersonalDocuments - Event documents:', filteredEventDocuments.length);
-  console.log('PersonalDocuments - Personal documents:', personalDocuments.length);
 
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return 'Taille inconnue';
@@ -50,9 +44,9 @@ export const PersonalDocuments: React.FC<PersonalDocumentsProps> = ({
   };
 
   const handleDownload = (document: any) => {
-    // Pour le mode local, on simule le téléchargement
+    const url = getDocumentUrl(document.file_path);
     const link = document.createElement('a');
-    link.href = document.file_path || document.file_url || '#';
+    link.href = url;
     link.download = document.name;
     link.click();
   };
@@ -89,11 +83,6 @@ export const PersonalDocuments: React.FC<PersonalDocumentsProps> = ({
           <div className="text-center py-8 text-gray-500">
             <Folder className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>Aucun document ne vous est assigné pour le moment</p>
-            {filteredEventDocuments.length > 0 && (
-              <p className="text-xs mt-2 text-gray-400">
-                {filteredEventDocuments.length} document{filteredEventDocuments.length > 1 ? 's' : ''} disponible{filteredEventDocuments.length > 1 ? 's' : ''} dans l'événement
-              </p>
-            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -115,7 +104,7 @@ export const PersonalDocuments: React.FC<PersonalDocumentsProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-medium text-gray-900 truncate">{document.name}</h4>
-                    {getSourceBadge(document.source || 'manual')}
+                    {getSourceBadge(document.source)}
                   </div>
                   
                   <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -138,7 +127,7 @@ export const PersonalDocuments: React.FC<PersonalDocumentsProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(document.file_path || document.file_url || '#', '_blank')}
+                    onClick={() => window.open(getDocumentUrl(document.file_path), '_blank')}
                     className="h-8 w-8 p-0"
                   >
                     <ExternalLink className="w-3 h-3" />

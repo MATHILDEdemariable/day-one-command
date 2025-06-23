@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useLocalCurrentEvent } from '@/contexts/LocalCurrentEventContext';
-import { useCurrentTenant } from './useCurrentTenant';
+import { useCurrentEvent } from '@/contexts/CurrentEventContext';
 
 export interface TimelineItem {
   id: string;
@@ -14,8 +13,7 @@ export interface TimelineItem {
   category: string;
   status: 'scheduled' | 'in_progress' | 'completed' | 'delayed';
   priority: 'high' | 'medium' | 'low';
-  assigned_person_ids: string[];
-  assigned_vendor_ids: string[];
+  assigned_person_id: string | null;
   assigned_role: string | null;
   order_index: number;
   notes: string | null;
@@ -34,10 +32,7 @@ type SupabaseTimelineItem = {
   category: string | null;
   status: string | null;
   priority: string | null;
-  assigned_person_id: string | null; // Garder pour compatibilité avec Supabase
-  assigned_person_ids: string[] | null;
-  assigned_vendor_id: string | null; // Garder pour compatibilité avec Supabase
-  assigned_vendor_ids: string[] | null;
+  assigned_person_id: string | null;
   assigned_role: string | null;
   order_index: number;
   notes: string | null;
@@ -50,21 +45,18 @@ const mapSupabaseToTimelineItem = (item: SupabaseTimelineItem): TimelineItem => 
   category: item.category || 'Préparation',
   status: (item.status as TimelineItem['status']) || 'scheduled',
   priority: (item.priority as TimelineItem['priority']) || 'medium',
-  assigned_person_ids: item.assigned_person_ids || (item.assigned_person_id ? [item.assigned_person_id] : []),
-  assigned_vendor_ids: item.assigned_vendor_ids || (item.assigned_vendor_id ? [item.assigned_vendor_id] : []),
   created_at: item.created_at || new Date().toISOString(),
   updated_at: item.updated_at || new Date().toISOString(),
 });
 
 export const useTimelineItems = () => {
   const { toast } = useToast();
-  const { currentEventId } = useLocalCurrentEvent();
-  const { data: currentTenant } = useCurrentTenant();
+  const { currentEventId } = useCurrentEvent();
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const loadTimelineItems = async () => {
-    if (!currentEventId || !currentTenant) return;
+    if (!currentEventId) return;
     
     setLoading(true);
     try {
@@ -76,7 +68,7 @@ export const useTimelineItems = () => {
 
       if (error) throw error;
       
-      const mappedData = data ? data.map((item: any) => mapSupabaseToTimelineItem(item as SupabaseTimelineItem)) : [];
+      const mappedData = data ? data.map(mapSupabaseToTimelineItem) : [];
       setTimelineItems(mappedData);
     } catch (error) {
       console.error('Error loading timeline items:', error);
@@ -91,7 +83,7 @@ export const useTimelineItems = () => {
   };
 
   const addTimelineItem = async (item: Omit<TimelineItem, 'id' | 'event_id' | 'created_at' | 'updated_at'>) => {
-    if (!currentEventId || !currentTenant) return;
+    if (!currentEventId) return;
 
     try {
       const { data, error } = await supabase
@@ -99,16 +91,13 @@ export const useTimelineItems = () => {
         .insert({
           ...item,
           event_id: currentEventId,
-          tenant_id: currentTenant.id,
-          assigned_person_ids: item.assigned_person_ids || [],
-          assigned_vendor_ids: item.assigned_vendor_ids || [],
         })
         .select()
         .single();
 
       if (error) throw error;
       
-      const mappedData = mapSupabaseToTimelineItem(data as any as SupabaseTimelineItem);
+      const mappedData = mapSupabaseToTimelineItem(data);
       setTimelineItems(prev => [...prev, mappedData]);
       toast({
         title: 'Succès',
@@ -126,26 +115,16 @@ export const useTimelineItems = () => {
 
   const updateTimelineItem = async (id: string, updates: Partial<TimelineItem>) => {
     try {
-      const updateData: any = { ...updates };
-      
-      // S'assurer que assigned_person_ids et assigned_vendor_ids sont toujours des tableaux
-      if (updates.assigned_person_ids !== undefined) {
-        updateData.assigned_person_ids = updates.assigned_person_ids;
-      }
-      if (updates.assigned_vendor_ids !== undefined) {
-        updateData.assigned_vendor_ids = updates.assigned_vendor_ids;
-      }
-
       const { data, error } = await supabase
         .from('timeline_items')
-        .update(updateData)
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
       
-      const mappedData = mapSupabaseToTimelineItem(data as any as SupabaseTimelineItem);
+      const mappedData = mapSupabaseToTimelineItem(data);
       setTimelineItems(prev => prev.map(item => 
         item.id === id ? { ...item, ...mappedData } : item
       ));

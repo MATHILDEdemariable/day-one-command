@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useCurrentTenant } from './useCurrentTenant';
 
 export interface EventDocument {
   id: string;
@@ -21,7 +20,6 @@ export const useEventDocuments = (eventId: string | null) => {
   const { toast } = useToast();
   const [documents, setDocuments] = useState<EventDocument[]>([]);
   const [uploading, setUploading] = useState(false);
-  const { data: currentTenant } = useCurrentTenant();
 
   const loadDocuments = async () => {
     if (!eventId) return;
@@ -46,7 +44,7 @@ export const useEventDocuments = (eventId: string | null) => {
   };
 
   const uploadDocuments = async (files: FileList) => {
-    if (!eventId || files.length === 0 || !currentTenant) return;
+    if (!eventId || files.length === 0) return;
 
     setUploading(true);
     const uploadPromises = Array.from(files).map(async (file) => {
@@ -71,8 +69,7 @@ export const useEventDocuments = (eventId: string | null) => {
             file_size: file.size,
             mime_type: file.type,
             source: 'manual',
-            assigned_to: [],
-            tenant_id: currentTenant.id
+            assigned_to: []
           })
           .select()
           .single();

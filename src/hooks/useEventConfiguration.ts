@@ -1,7 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useCurrentTenant } from './useCurrentTenant';
 
 interface EventConfiguration {
   id?: string;
@@ -27,7 +27,6 @@ export const useEventConfiguration = (eventId: string) => {
   const [roles, setRoles] = useState<EventRole[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { data: currentTenant } = useCurrentTenant();
 
   useEffect(() => {
     if (eventId) {
@@ -100,13 +99,9 @@ export const useEventConfiguration = (eventId: string) => {
         if (error) throw error;
       } else {
         // Create new configuration
-        if (!currentTenant) {
-          toast({ title: "Erreur", description: "Tenant non trouvé", variant: "destructive" });
-          return;
-        }
         const { data, error } = await supabase
           .from('event_configurations')
-          .insert({ ...config, event_id: eventId, tenant_id: currentTenant.id })
+          .insert({ ...config, event_id: eventId })
           .select()
           .single();
 
@@ -157,10 +152,6 @@ export const useEventConfiguration = (eventId: string) => {
   };
 
   const addRole = async (roleName: string) => {
-    if (!currentTenant) {
-      toast({ title: "Erreur", description: "Tenant non trouvé", variant: "destructive" });
-      return;
-    }
     try {
       const { error } = await supabase
         .from('event_roles')
@@ -169,7 +160,6 @@ export const useEventConfiguration = (eventId: string) => {
           role_name: roleName,
           is_active: true,
           is_default: false,
-          tenant_id: currentTenant.id
         });
 
       if (error) throw error;
